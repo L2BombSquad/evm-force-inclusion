@@ -1,0 +1,48 @@
+{
+  "name": "evm-force-inclusion",
+  "version": "0.2.0",
+  "description": "TypeScript SDK for building force inclusion transactions on Arbitrum and Base",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --sourcemap",
+    "test": "vitest run",
+    "dev": "vitest",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run build && npm run test"
+  },
+  "keywords": [
+    "arbitrum",
+    "optimism",
+    "base",
+    "bridge",
+    "force-inclusion",
+    "l2"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ethers": "^6.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "rimraf": "^5.0.5",
+    "tsup": "^7.2.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.5.0"
+  }
+}
