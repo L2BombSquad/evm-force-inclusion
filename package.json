@@ -22,7 +22,7 @@
     "test": "vitest run",
     "dev": "vitest",
     "clean": "rimraf dist",
-    "prepublishOnly": "npm run build && npm run test"
+    "prepublishOnly": "bun run build && bun test"
   },
   "keywords": [
     "arbitrum",
