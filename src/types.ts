@@ -1,4 +1,6 @@
-import type { BigNumberish, ContractTransactionResponse, Signer } from "ethers";
+import type { Hash, WalletClient } from "viem";
+
+export type BigNumberish = bigint | number | string;
 
 export type HexData = `0x${string}`;
 
@@ -13,7 +15,7 @@ export interface ArbitrumInboxContract {
     gasPriceBid: BigNumberish,
     data: HexData,
     overrides?: { value: BigNumberish }
-  ): Promise<ContractTransactionResponse>;
+  ): Promise<Hash>;
 }
 
 export interface OptimismPortalContract {
@@ -24,17 +26,17 @@ export interface OptimismPortalContract {
     isCreation: boolean,
     data: HexData,
     overrides?: { value: BigNumberish }
-  ): Promise<ContractTransactionResponse>;
+  ): Promise<Hash>;
 }
 
 export interface ForceInclusionContractFactories {
-  createArbitrumInbox(address: string, signer: Signer): ArbitrumInboxContract;
-  createOptimismPortal(address: string, signer: Signer): OptimismPortalContract;
+  createArbitrumInbox(address: string, walletClient: WalletClient): ArbitrumInboxContract;
+  createOptimismPortal(address: string, walletClient: WalletClient): OptimismPortalContract;
 }
 
 export interface ForceInclusionContractOverride<TContract> {
   address?: string;
-  factory?: (address: string, signer: Signer) => TContract;
+  factory?: (address: string, walletClient: WalletClient) => TContract;
 }
 
 export interface ForceInclusionContractOverrides {
@@ -43,7 +45,7 @@ export interface ForceInclusionContractOverrides {
 }
 
 export interface ForceInclusionClientConfig {
-  signer: Signer;
+  walletClient: WalletClient;
   arbitrumInboxAddress?: string;
   optimismPortalAddress?: string;
   factories?: Partial<ForceInclusionContractFactories>;

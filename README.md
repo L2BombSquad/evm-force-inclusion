@@ -5,7 +5,7 @@ TypeScript SDK for constructing L1 transactions that force messages onto Arbitru
 ## Installation
 
 ```bash
-npm install evm-force-inclusion
+npm install evm-force-inclusion viem
 ```
 
 ## Usage
@@ -19,6 +19,7 @@ import {
   DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS,
 } from "evm-force-inclusion";
 
+// Option A: quickstart with a private key (expects 0x-prefixed hex)
 const client = ForceInclusionClient.fromPrivateKey(
   process.env.WALLET_PRIVATE_KEY!,
   "https://mainnet.rpc"
@@ -46,8 +47,8 @@ await client.sendTransaction({
 
 ### `ForceInclusionClient`
 
-- `constructor(config)` – create with an existing `Signer` and optional contract overrides.
-- `ForceInclusionClient.fromPrivateKey(privateKey, rpcUrl, overrides)` – convenience constructor.
+- `constructor(config)` – create with an existing `WalletClient` from `viem` and optional contract overrides.
+- `ForceInclusionClient.fromPrivateKey(privateKey, rpcUrl, overrides)` – convenience constructor using `viem` under the hood.
 - `sendTransaction(request)` – unified entry point; pass `request.l2.type` as `"arb"` or `"op"` with an explicit `l1ContractAddress`.
 - `createArbitrumRetryableTicket(request)` / `depositToOptimismPortal(request)` remain available for direct interaction, if preferred.
 
@@ -58,8 +59,16 @@ Requests validate numeric inputs, normalize data payloads, and use the caller ad
 Pass `contracts` to the constructor when you want to point at alternate Nitro or OP Stack deployments:
 
 ```ts
+import { createWalletClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+
+const walletClient = createWalletClient({
+  account: privateKeyToAccount(process.env.WALLET_PRIVATE_KEY! as `0x${string}`),
+  transport: http("https://mainnet.rpc"),
+});
+
 const client = new ForceInclusionClient({
-  signer,
+  walletClient,
   contracts: {
     arbitrumInbox: { address: "0x..." },
     optimismPortal: { address: "0x..." },
@@ -108,8 +117,42 @@ await client.sendTransaction({
   gasLimit: 200000n,
 });
 
-// Ensure the signer holds ETH on Sepolia to cover L1 gas.
+// Ensure the wallet holds ETH on Sepolia to cover L1 gas.
 ```
+
+### Arbitrum retryables vs OP deposits
+
+- **Arbitrum (Nitro)**: `createRetryableTicket` will attempt an auto-redeem on L2. If auto-redeem fails (e.g. insufficient `maxGas/gasPriceBid` or the L2 call reverts, or if you are interacting with a testnet), you must redeem the ticket on L2 within its lifetime. This SDK only submits the L1 transaction; it does not redeem on L2 for you.
+- **OP Stack (Optimism/Base, etc.)**: `depositTransaction` is executed by the derivation pipeline; there is no separate redeem step.
+
+Minimal viem example to redeem an Arbitrum retryable on L2 (if needed):
+
+```ts
+import { createWalletClient, http } from "viem";
+import { parseAbi } from "viem";
+
+// Precompile address on Arbitrum chains
+const ARB_RETRYABLE_TX = "0x000000000000000000000000000000000000006e" as const;
+const ARB_RETRYABLE_ABI = parseAbi([
+  "function redeem(bytes32 ticketId) returns (bool)"
+]);
+
+// ticketId must be obtained from the retryable workflow (e.g. event/indexer)
+async function redeemRetryable(walletClient: any, ticketId: `0x${string}`) {
+  return walletClient.writeContract({
+    address: ARB_RETRYABLE_TX,
+    abi: ARB_RETRYABLE_ABI,
+    functionName: "redeem",
+    account: walletClient.account,
+    chain: walletClient.chain,
+    args: [ticketId],
+  });
+}
+```
+
+Notes:
+- The ticket lifetime and semantics are defined by Arbitrum; ensure you monitor the L2 execution status and redeem before expiry if auto-redeem fails.
+- OP Stack chains do not require a redeem call; ensure you size `gasLimit` appropriately for your deposit call.
 
 ### Default Addresses
 
@@ -127,3 +170,7 @@ npm run test
 ```
 
 Publishing is wired through `prepublishOnly` which runs the build and test suite automatically.
+
+### Note on peer dependency
+
+This package now uses `viem` instead of `ethers`. `viem` is declared as a peer dependency, so ensure it is installed in your application.

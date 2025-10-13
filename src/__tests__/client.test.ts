@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Signer } from "ethers";
+import type { WalletClient } from "viem";
 
 import { ForceInclusionClient } from "../client.js";
 import {
@@ -8,22 +8,22 @@ import {
   DEFAULT_OPTIMISM_PORTAL_ADDRESS,
   DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS,
 } from "../constants.js";
-import type {
-  ArbitrumInboxContract,
-  OptimismPortalContract,
-} from "../types.js";
+import type { ArbitrumInboxContract, OptimismPortalContract } from "../types.js";
 
-function createTestSigner(address: string): Signer {
+function createTestWalletClient(address: string): WalletClient {
+  // Minimal stub: only account.address is used by the client during tests.
   return {
-    getAddress: async () => address,
-  } as unknown as Signer;
+    account: { address: address as `0x${string}` },
+  } as unknown as WalletClient;
 }
 
 describe("ForceInclusionClient", () => {
   it("creates retryable ticket with computed msg value and defaults", async () => {
     const calls: unknown[][] = [];
 
-    const signer = createTestSigner("0x1111111111111111111111111111111111111111");
+    const walletClient = createTestWalletClient(
+      "0x1111111111111111111111111111111111111111"
+    );
     const inbox: ArbitrumInboxContract = {
       createRetryableTicket: (
         to,
@@ -52,7 +52,7 @@ describe("ForceInclusionClient", () => {
     };
 
     const client = new ForceInclusionClient({
-      signer,
+      walletClient,
       factories: {
         createArbitrumInbox: () => inbox,
       },
@@ -84,7 +84,9 @@ describe("ForceInclusionClient", () => {
   it("deposits to optimism portal with provided values", async () => {
     const calls: unknown[][] = [];
 
-    const signer = createTestSigner("0x1111111111111111111111111111111111111111");
+    const walletClient = createTestWalletClient(
+      "0x1111111111111111111111111111111111111111"
+    );
     const portal: OptimismPortalContract = {
       depositTransaction: (to, value, gasLimit, isCreation, data, overrides) => {
         calls.push([to, value, gasLimit, isCreation, data, overrides]);
@@ -93,7 +95,7 @@ describe("ForceInclusionClient", () => {
     };
 
     const client = new ForceInclusionClient({
-      signer,
+      walletClient,
       factories: {
         createOptimismPortal: () => portal,
       },
@@ -120,13 +122,15 @@ describe("ForceInclusionClient", () => {
   });
 
   it("normalizes data and validates inputs", async () => {
-    const signer = createTestSigner("0x1111111111111111111111111111111111111111");
+    const walletClient = createTestWalletClient(
+      "0x1111111111111111111111111111111111111111"
+    );
     const inbox: ArbitrumInboxContract = {
       createRetryableTicket: async () => ({} as any),
     };
 
     const client = new ForceInclusionClient({
-      signer,
+      walletClient,
       factories: {
         createArbitrumInbox: () => inbox,
       },
@@ -157,9 +161,11 @@ describe("ForceInclusionClient", () => {
   });
 
   it("allows overriding default contracts through config", async () => {
-    const signer = createTestSigner("0x4444444444444444444444444444444444444444");
+    const walletClient = createTestWalletClient(
+      "0x4444444444444444444444444444444444444444"
+    );
     const inboxCalls: unknown[][] = [];
-    const factoryInvocations: Array<[string, Signer]> = [];
+    const factoryInvocations: Array<[string, WalletClient]> = [];
     const customInbox = "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
     const inbox: ArbitrumInboxContract = {
@@ -190,12 +196,12 @@ describe("ForceInclusionClient", () => {
     };
 
     const client = new ForceInclusionClient({
-      signer,
+      walletClient,
       contracts: {
         arbitrumInbox: {
           address: customInbox,
-          factory: (address, providedSigner) => {
-            factoryInvocations.push([address, providedSigner]);
+          factory: (address, providedWalletClient) => {
+            factoryInvocations.push([address, providedWalletClient]);
             return inbox;
           },
         },
@@ -214,12 +220,14 @@ describe("ForceInclusionClient", () => {
       gasPriceBid: 4n,
     });
 
-    expect(factoryInvocations).toEqual([[customInbox.toLowerCase(), signer]]);
+    expect(factoryInvocations[0][0]).toEqual(customInbox.toLowerCase());
     expect(inboxCalls).toHaveLength(1);
   });
 
   it("supports sepolia contract addresses", async () => {
-    const signer = createTestSigner("0x5555555555555555555555555555555555555555");
+    const walletClient = createTestWalletClient(
+      "0x5555555555555555555555555555555555555555"
+    );
 
     const arbitrumFactoryCalls: string[] = [];
     const optimismFactoryCalls: string[] = [];
@@ -233,7 +241,7 @@ describe("ForceInclusionClient", () => {
     };
 
     const client = new ForceInclusionClient({
-      signer,
+      walletClient,
       factories: {
         createArbitrumInbox: (address) => {
           arbitrumFactoryCalls.push(address);

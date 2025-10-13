@@ -1,5 +1,6 @@
-import { Contract, JsonRpcProvider, Wallet } from "ethers";
-import type { ContractTransactionResponse, Signer } from "ethers";
+import type { WalletClient } from "viem";
+import { createWalletClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 import { DEFAULT_ARBITRUM_INBOX_ADDRESS, DEFAULT_OPTIMISM_PORTAL_ADDRESS } from "./constants.js";
 import { ARBITRUM_INBOX_ABI, OPTIMISM_PORTAL_ABI } from "./contracts.js";
@@ -17,14 +18,67 @@ import type {
 import { normalizeHexData, toBigInt } from "./utils.js";
 
 const defaultFactories: ForceInclusionContractFactories = {
-  createArbitrumInbox: (address: string, signer: Signer) =>
-    new Contract(address, ARBITRUM_INBOX_ABI, signer) as unknown as ArbitrumInboxContract,
-  createOptimismPortal: (address: string, signer: Signer) =>
-    new Contract(address, OPTIMISM_PORTAL_ABI, signer) as unknown as OptimismPortalContract,
+  createArbitrumInbox: (address: string, walletClient: WalletClient) => {
+    const normalized = address.toLowerCase() as `0x${string}`;
+    return {
+      async createRetryableTicket(
+        to,
+        l2CallValue,
+        maxSubmissionCost,
+        excessFeeRefundAddress,
+        callValueRefundAddress,
+        maxGas,
+        gasPriceBid,
+        data,
+        overrides
+      ) {
+        if (!walletClient.account) {
+          throw new Error("WalletClient must be configured with an account");
+        }
+        return walletClient.writeContract({
+          address: normalized,
+          abi: ARBITRUM_INBOX_ABI,
+          functionName: "createRetryableTicket",
+          account: walletClient.account,
+          chain: walletClient.chain,
+          args: [
+            to as `0x${string}`,
+            l2CallValue as bigint,
+            maxSubmissionCost as bigint,
+            excessFeeRefundAddress as `0x${string}`,
+            callValueRefundAddress as `0x${string}`,
+            maxGas as bigint,
+            gasPriceBid as bigint,
+            data,
+          ],
+          value: overrides?.value as bigint | undefined,
+        });
+      },
+    } as ArbitrumInboxContract;
+  },
+  createOptimismPortal: (address: string, walletClient: WalletClient) => {
+    const normalized = address.toLowerCase() as `0x${string}`;
+    return {
+      async depositTransaction(to, value, gasLimit, isCreation, data, overrides) {
+        if (!walletClient.account) {
+          throw new Error("WalletClient must be configured with an account");
+        }
+        return walletClient.writeContract({
+          address: normalized,
+          abi: OPTIMISM_PORTAL_ABI,
+          functionName: "depositTransaction",
+          account: walletClient.account,
+          chain: walletClient.chain,
+          args: [to as `0x${string}`, value as bigint, gasLimit as bigint, isCreation, data],
+          value: overrides?.value as bigint | undefined,
+        });
+      },
+    } as OptimismPortalContract;
+  },
 };
 
 export class ForceInclusionClient {
-  private readonly signer: Signer;
+  private readonly walletClient: WalletClient;
   private readonly arbitrumInboxAddress: string;
   private readonly optimismPortalAddress: string;
   private readonly factories: ForceInclusionContractFactories;
@@ -32,7 +86,7 @@ export class ForceInclusionClient {
   private readonly optimismCache = new Map<string, OptimismPortalContract>();
 
   constructor(config: ForceInclusionClientConfig) {
-    this.signer = config.signer;
+    this.walletClient = config.walletClient;
     const arbitrumContracts = config.contracts?.arbitrumInbox ?? {};
     const optimismContracts = config.contracts?.optimismPortal ?? {};
 
@@ -57,7 +111,7 @@ export class ForceInclusionClient {
 
   async createArbitrumRetryableTicket(
     request: ArbitrumRetryableTicketRequest
-  ): Promise<ContractTransactionResponse> {
+  ) {
     const inbox = this.getArbitrumInbox((request.inboxAddress ?? this.arbitrumInboxAddress).toLowerCase());
 
     const l2CallValue = toBigInt(request.l2CallValue, "l2CallValue");
@@ -66,7 +120,7 @@ export class ForceInclusionClient {
     const gasPriceBid = toBigInt(request.gasPriceBid, "gasPriceBid");
     const data = normalizeHexData(request.data);
 
-    const refundAddress = request.excessFeeRefundAddress ?? (await this.signer.getAddress());
+    const refundAddress = request.excessFeeRefundAddress ?? (await this.getAccountAddress());
     const callValueRefundAddress = request.callValueRefundAddress ?? refundAddress;
 
     const msgValue = maxSubmissionCost + l2CallValue + gasPriceBid * maxGas;
@@ -86,7 +140,7 @@ export class ForceInclusionClient {
 
   async depositToOptimismPortal(
     request: OptimismDepositRequest
-  ): Promise<ContractTransactionResponse> {
+  ) {
     const portal = this.getOptimismPortal((request.portalAddress ?? this.optimismPortalAddress).toLowerCase());
 
     const value = toBigInt(request.value, "value");
@@ -99,7 +153,7 @@ export class ForceInclusionClient {
 
   async sendTransaction(
     request: ForceInclusionTransactionRequest
-  ): Promise<ContractTransactionResponse> {
+  ) {
     if (request.l2.type === "arb") {
       const { l2, ...rest } = request as ArbitrumTransactionRequest;
       const normalized: ArbitrumRetryableTicketRequest = {
@@ -124,11 +178,19 @@ export class ForceInclusionClient {
   static fromPrivateKey(
     privateKey: string,
     rpcUrl: string,
-    overrides: Omit<ForceInclusionClientConfig, "signer"> = {}
+    overrides: Omit<ForceInclusionClientConfig, "walletClient"> = {}
   ): ForceInclusionClient {
-    const provider = new JsonRpcProvider(rpcUrl);
-    const signer = new Wallet(privateKey, provider);
-    return new ForceInclusionClient({ signer, ...overrides });
+    const account = privateKeyToAccount(privateKey as `0x${string}`);
+    const walletClient = createWalletClient({ account, transport: http(rpcUrl) });
+    return new ForceInclusionClient({ walletClient, ...overrides });
+  }
+
+  private async getAccountAddress(): Promise<string> {
+    const addr = this.walletClient.account?.address;
+    if (!addr) {
+      throw new Error("WalletClient has no account. Provide an account when creating the client.");
+    }
+    return addr;
   }
 
   private getArbitrumInbox(address: string): ArbitrumInboxContract {
@@ -138,7 +200,7 @@ export class ForceInclusionClient {
       return existing;
     }
 
-    const contract = this.factories.createArbitrumInbox(normalized, this.signer);
+    const contract = this.factories.createArbitrumInbox(normalized, this.walletClient);
     this.arbitrumCache.set(normalized, contract);
     return contract;
   }
@@ -150,7 +212,7 @@ export class ForceInclusionClient {
       return existing;
     }
 
-    const contract = this.factories.createOptimismPortal(normalized, this.signer);
+    const contract = this.factories.createOptimismPortal(normalized, this.walletClient);
     this.optimismCache.set(normalized, contract);
     return contract;
   }
