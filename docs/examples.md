@@ -15,4 +15,4 @@ bun install
 bun run dev
 ```
 
-Open http://localhost:5173 and fill out the form. Use a test private key.
+Open `http://localhost:5173` and fill out the form. Use a test private key.
