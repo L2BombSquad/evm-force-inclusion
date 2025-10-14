@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
-import { parseEther, createPublicClient, http } from "viem";
+import { parseEther } from "viem";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useWalletClient } from "wagmi";
+import { sepolia } from "wagmi/chains";
 import {
   ForceInclusionClient,
   DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS,
 } from "evm-force-inclusion";
 
 function App() {
-  const [privateKey, setPrivateKey] = useState("");
+  const { data: walletClient } = useWalletClient();
   const [toAddress, setToAddress] = useState("");
   const [amountEth, setAmountEth] = useState("0.01");
   const [gasLimit, setGasLimit] = useState("200000");
@@ -14,9 +17,7 @@ function App() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const rpcUrl = useMemo(() => {
-    return import.meta.env.VITE_RPC_URL || "https://sepolia.drpc.org";
-  }, []);
+  const l1Name = useMemo(() => "Sepolia (L1)", []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -24,21 +25,16 @@ function App() {
     setError(null);
     setTxHash(null);
     try {
-      if (!privateKey.startsWith("0x")) {
-        throw new Error("Private key must be 0x-prefixed hex");
-      }
+      if (!walletClient) throw new Error("Connect your wallet to continue");
       if (!toAddress || !toAddress.startsWith("0x")) {
         throw new Error("Recipient must be a 0x-prefixed address");
       }
       const gasLimitBigInt = BigInt(gasLimit || "200000");
-      const id = await createPublicClient({ transport: http(rpcUrl) }).getChainId();
-      if (id !== 11155111) {
-        throw new Error(`RPC must be Ethereum Sepolia (chainId 11155111); got ${id}`);
+      const id = walletClient.chain?.id;
+      if (id !== sepolia.id) {
+        throw new Error(`Please switch your wallet to Sepolia (chainId ${sepolia.id}).`);
       }
-      const client = ForceInclusionClient.fromPrivateKey(
-        privateKey as `0x${string}`,
-        rpcUrl
-      );
+      const client = new ForceInclusionClient({ walletClient });
       const hash = await client.sendTransaction({
         l2: {
           type: "op",
@@ -66,9 +62,12 @@ function App() {
         fontFamily: "Inter, system-ui, Arial, sans-serif",
       }}
     >
-      <h1 style={{ marginTop: 0 }}>
-        Optimism Sepolia Deposit (L1 → OP Sepolia)
-      </h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1 style={{ marginTop: 0 }}>
+          Optimism Sepolia Deposit (L1 → OP Sepolia)
+        </h1>
+        <ConnectButton />
+      </div>
       <div
         style={{
           padding: 12,
@@ -78,29 +77,11 @@ function App() {
           marginBottom: 16,
         }}
       >
-        <strong>Demo only:</strong> This app asks for a private key and sends it
-        to viem in-browser to sign transactions. Do not use a production or
-        valuable key. Prefer a fresh test wallet funded with Sepolia ETH.
+        <strong>Note:</strong> Connect a wallet on {l1Name}. Deposits are sent from your
+        connected account to the Optimism Portal on L1.
       </div>
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Private key (0x…)</span>
-          <input
-            value={privateKey}
-            onChange={(e) => setPrivateKey(e.target.value.trim())}
-            placeholder="0x..."
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 6,
-              border: "1px solid #d9d9d9",
-            }}
-          />
-        </label>
-
         <label style={{ display: "grid", gap: 6 }}>
           <span>Recipient address (OP Sepolia)</span>
           <input
@@ -214,7 +195,9 @@ function App() {
         </div>
       )}
 
-      <div style={{ marginTop: 24, color: "#8c8c8c" }}>RPC: {rpcUrl}</div>
+      <div style={{ marginTop: 24, color: "#8c8c8c" }}>
+        Connected chain: {walletClient?.chain?.name || "—"}
+      </div>
     </div>
   );
 }

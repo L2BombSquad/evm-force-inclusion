@@ -64,3 +64,4 @@ import { createPublicClient, http } from 'viem';
 const id = await createPublicClient({ transport: http(rpcUrl) }).getChainId();
 if (id !== 11155111) throw new Error('Use a Sepolia RPC URL');
 ```
+

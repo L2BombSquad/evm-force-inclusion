@@ -32,3 +32,4 @@ export function DepositButton() {
 Notes:
 - Ensure the connected wallet is on the correct L1 (Mainnet vs Sepolia) for the chosen contract address.
 - For Arbitrum, size retryable parameters as needed (`maxSubmissionCost`, `maxGas`, `gasPriceBid`).
+
