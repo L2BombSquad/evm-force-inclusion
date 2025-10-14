@@ -10,21 +10,54 @@ npm install evm-force-inclusion viem
 
 ## Usage
 
+Choose one of the following:
+
+### Option 1 — wagmi (browser wallet connectors)
+
+```tsx
+import { useWalletClient } from "wagmi";
+import {
+  ForceInclusionClient,
+  DEFAULT_OPTIMISM_PORTAL_ADDRESS,
+} from "evm-force-inclusion";
+import { parseEther } from "viem";
+
+export function DepositButton() {
+  const { data: walletClient } = useWalletClient();
+
+  async function onClick() {
+    if (!walletClient) return;
+    const client = new ForceInclusionClient({ walletClient });
+    await client.sendTransaction({
+      l2: { type: "op", l1ContractAddress: DEFAULT_OPTIMISM_PORTAL_ADDRESS },
+      to: "0xRecipient...",
+      value: parseEther("0.01"),
+      gasLimit: 200000n,
+      data: "0x",
+    });
+  }
+
+  return <button onClick={onClick}>Deposit to OP</button>;
+}
+```
+
+For a more complete example (including Sepolia), see the wagmi doc in `docs/wagmi.md`.
+
+### Option 2 — private key (server scripts, bots, CLIs)
+
 ```ts
 import {
   ForceInclusionClient,
   DEFAULT_ARBITRUM_INBOX_ADDRESS,
-  DEFAULT_ARBITRUM_SEPOLIA_INBOX_ADDRESS,
   DEFAULT_OPTIMISM_PORTAL_ADDRESS,
-  DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS,
 } from "evm-force-inclusion";
 
-// Option A: quickstart with a private key (expects 0x-prefixed hex)
 const client = ForceInclusionClient.fromPrivateKey(
   process.env.WALLET_PRIVATE_KEY!,
   "https://mainnet.rpc"
 );
 
+// Arbitrum: create a retryable ticket
 await client.sendTransaction({
   l2: { type: "arb", l1ContractAddress: DEFAULT_ARBITRUM_INBOX_ADDRESS },
   to: "0x...", // L2 recipient
@@ -35,6 +68,7 @@ await client.sendTransaction({
   data: "0x",
 });
 
+// OP Stack: deposit transaction
 await client.sendTransaction({
   l2: { type: "op", l1ContractAddress: DEFAULT_OPTIMISM_PORTAL_ADDRESS },
   to: "0x...",
