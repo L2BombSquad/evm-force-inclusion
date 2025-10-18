@@ -20,8 +20,8 @@ const client = ForceInclusionClient.fromPrivateKey(
   'https://sepolia.drpc.org'
 );
 
-await client.sendTransaction({
-  l2: { type: 'op', l1ContractAddress: DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS },
+await client.optimism().send({
+  portalAddress: DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS,
   to: '0xRecipient...',
   value: parseEther('0.01'),
   gasLimit: 200000n,
@@ -42,8 +42,8 @@ const client = ForceInclusionClient.fromPrivateKey(
   'https://sepolia.drpc.org'
 );
 
-await client.sendTransaction({
-  l2: { type: 'arb', l1ContractAddress: DEFAULT_ARBITRUM_SEPOLIA_INBOX_ADDRESS },
+await client.arbitrum().send({
+  inboxAddress: DEFAULT_ARBITRUM_SEPOLIA_INBOX_ADDRESS,
   to: '0xRecipient...', // L2 recipient
   l2CallValue: 0n,
   maxSubmissionCost: 100000000000000n,
@@ -63,5 +63,21 @@ await client.sendTransaction({
 import { createPublicClient, http } from 'viem';
 const id = await createPublicClient({ transport: http(rpcUrl) }).getChainId();
 if (id !== 11155111) throw new Error('Use a Sepolia RPC URL');
+```
+
+## Facade and Plugins
+
+```ts
+// Facade routing (no l2.type needed here)
+await client.optimism().send({
+  portalAddress: DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS,
+  to: '0xRecipient...',
+  value: parseEther('0.01'),
+  gasLimit: 200000n,
+});
+
+// Register a custom adapter at runtime
+client.registerAdapter(MyAdapter);
+await client.rollup('my').send({ /* adapter-specific body for your adapter */ } as any);
 ```
 

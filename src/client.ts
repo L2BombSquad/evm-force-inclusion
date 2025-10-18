@@ -14,8 +14,14 @@ import type {
   OptimismDepositRequest,
   OptimismTransactionRequest,
   OptimismPortalContract,
+  ForceExitRequest,
 } from "./types.js";
 import { normalizeHexData, toBigInt } from "./utils.js";
+import { CoreEngine } from "./core/engine.js";
+import { AdapterRegistry, createRegistryWithAdapters } from "./core/registry.js";
+import type { RollupAdapter } from "./core/adapter.js";
+import { ArbitrumAdapter } from "./adapters/arbitrum.js";
+import { OptimismAdapter } from "./adapters/optimism.js";
 
 const defaultFactories: ForceInclusionContractFactories = {
   createArbitrumInbox: (address: string, walletClient: WalletClient) => {
@@ -84,6 +90,9 @@ export class ForceInclusionClient {
   private readonly factories: ForceInclusionContractFactories;
   private readonly arbitrumCache = new Map<string, ArbitrumInboxContract>();
   private readonly optimismCache = new Map<string, OptimismPortalContract>();
+  private readonly engine: CoreEngine;
+  private readonly coreOptions: import("./types.js").CoreOptions;
+  private readonly registry: AdapterRegistry;
 
   constructor(config: ForceInclusionClientConfig) {
     this.walletClient = config.walletClient;
@@ -107,6 +116,10 @@ export class ForceInclusionClient {
         config.factories?.createOptimismPortal ??
         defaultFactories.createOptimismPortal,
     };
+
+    this.coreOptions = config.core ?? {};
+    this.engine = new CoreEngine(this.coreOptions);
+    this.registry = createRegistryWithAdapters([ArbitrumAdapter, OptimismAdapter]);
   }
 
   async createArbitrumRetryableTicket(
@@ -154,25 +167,95 @@ export class ForceInclusionClient {
   async sendTransaction(
     request: ForceInclusionTransactionRequest
   ) {
-    if (request.l2.type === "arb") {
-      const { l2, ...rest } = request as ArbitrumTransactionRequest;
-      const normalized: ArbitrumRetryableTicketRequest = {
-        ...rest,
-        inboxAddress: l2.l1ContractAddress,
-      };
-      return this.createArbitrumRetryableTicket(normalized);
+    // Temporary deprecation notice
+    if (process?.env?.NODE_ENV !== "test") {
+      try {
+        // Only warn once per process
+        // @ts-expect-error - attach symbol on globalThis
+        if (!globalThis.__efi_warned_sendTransaction) {
+          // @ts-expect-error - attach symbol on globalThis
+          globalThis.__efi_warned_sendTransaction = true;
+          // eslint-disable-next-line no-console
+          console.warn(
+            "evm-force-inclusion: sendTransaction(request) is deprecated. Use client.rollup(type).send(...) or client.optimism()/client.arbitrum() instead."
+          );
+        }
+      } catch {}
+    }
+    const adapter = this.registry.getAdapterByType(request.l2.type);
+    if (!adapter) {
+      throw new Error("Unsupported L2 type");
     }
 
-    if (request.l2.type === "op") {
-      const { l2, ...rest } = request as OptimismTransactionRequest;
-      const normalized: OptimismDepositRequest = {
-        ...rest,
-        portalAddress: l2.l1ContractAddress,
-      };
-      return this.depositToOptimismPortal(normalized);
-    }
+    const context = {
+      walletClient: this.walletClient,
+      factories: this.factories,
+      defaultArbitrumInboxAddress: this.arbitrumInboxAddress,
+      defaultOptimismPortalAddress: this.optimismPortalAddress,
+      getAccountAddress: this.getAccountAddress.bind(this),
+      logger: this.coreOptions.logger ?? console,
+    };
 
-    throw new Error("Unsupported L2 type");
+    // Backwards compatibility: pass through legacy shape to adapter
+    // but adapters now accept rollup-specific request bodies without l2.type
+    let routed: any = request;
+    if ((request as any).l2?.type === "arb") {
+      const { l2, ...rest } = request as any;
+      routed = { ...rest, inboxAddress: l2.l1ContractAddress };
+    } else if ((request as any).l2?.type === "op") {
+      const { l2, ...rest } = request as any;
+      routed = { ...rest, portalAddress: l2.l1ContractAddress };
+    }
+    return this.engine.execute(adapter, routed, context);
+  }
+
+  /** Register an additional rollup adapter at runtime */
+  registerAdapter(adapter: RollupAdapter): void {
+    this.registry.register(adapter);
+  }
+
+  /** Target a rollup by alias and reuse the configured wallet/factories */
+  rollup(type: string) {
+    const adapter = this.registry.getAdapterByType(type);
+    if (!adapter) {
+      throw new Error(`Unsupported rollup: ${type}`);
+    }
+    const context = {
+      walletClient: this.walletClient,
+      factories: this.factories,
+      defaultArbitrumInboxAddress: this.arbitrumInboxAddress,
+      defaultOptimismPortalAddress: this.optimismPortalAddress,
+      getAccountAddress: this.getAccountAddress.bind(this),
+      logger: this.coreOptions.logger ?? console,
+    };
+    return {
+      // Accept adapter-specific body (no l2.type required)
+      send: (request: any) => this.engine.execute(adapter, request, context),
+    } as const;
+  }
+
+  /** Convenience methods for built-ins */
+  arbitrum() {
+    return this.rollup("arb");
+  }
+
+  optimism() {
+    return this.rollup("op");
+  }
+
+  /** High-level forced-exit flow routed through the adapter system */
+  async forceExit(request: ForceExitRequest) {
+    const adapter = this.registry.getAdapterByType(request.rollup);
+    if (!adapter) throw new Error(`Unsupported rollup: ${request.rollup}`);
+    const context = {
+      walletClient: this.walletClient,
+      factories: this.factories,
+      defaultArbitrumInboxAddress: this.arbitrumInboxAddress,
+      defaultOptimismPortalAddress: this.optimismPortalAddress,
+      getAccountAddress: this.getAccountAddress.bind(this),
+      logger: this.coreOptions.logger ?? console,
+    };
+    return this.engine.executeForcedExit(adapter, request, context);
   }
 
   static fromPrivateKey(

@@ -5,6 +5,15 @@ export {
   DEFAULT_OPTIMISM_PORTAL_ADDRESS,
   DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS,
 } from "./constants.js";
+export type { RollupAdapter } from "./core/adapter.js";
+export { AdapterRegistry } from "./core/registry.js";
+export type {
+  Logger,
+  CoreOptions,
+  Token,
+  Address,
+  ForceExitRequest,
+} from "./types.js";
 export type {
   ArbitrumRetryableTicketRequest,
   ArbitrumTransactionRequest,

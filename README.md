@@ -5,14 +5,14 @@ TypeScript SDK for constructing L1 transactions that force messages onto Arbitru
 ## Installation
 
 ```bash
-npm install evm-force-inclusion viem
+bun add evm-force-inclusion viem
 ```
 
 ## Usage
 
 Choose one of the following:
 
-### Option 1 — wagmi (browser wallet connectors)
+### wagmi (browser wallet connectors)
 
 ```tsx
 import { useWalletClient } from "wagmi";
@@ -28,8 +28,8 @@ export function DepositButton() {
   async function onClick() {
     if (!walletClient) return;
     const client = new ForceInclusionClient({ walletClient });
-    await client.sendTransaction({
-      l2: { type: "op", l1ContractAddress: DEFAULT_OPTIMISM_PORTAL_ADDRESS },
+    await client.optimism().send({
+      portalAddress: DEFAULT_OPTIMISM_PORTAL_ADDRESS,
       to: "0xRecipient...",
       value: parseEther("0.01"),
       gasLimit: 200000n,
@@ -43,7 +43,7 @@ export function DepositButton() {
 
 For a more complete example (including Sepolia), see the wagmi doc in `docs/wagmi.md`.
 
-### Option 2 — private key (server scripts, bots, CLIs)
+### Server scripts (private key, bots, CLIs)
 
 ```ts
 import {
@@ -57,23 +57,23 @@ const client = ForceInclusionClient.fromPrivateKey(
   "https://mainnet.rpc"
 );
 
+// OP Stack: deposit transaction
+await client.optimism().send({
+  portalAddress: DEFAULT_OPTIMISM_PORTAL_ADDRESS,
+  to: "0x...",
+  value: 1000000000000000n,
+  gasLimit: 200000n,
+});
+
 // Arbitrum: create a retryable ticket
-await client.sendTransaction({
-  l2: { type: "arb", l1ContractAddress: DEFAULT_ARBITRUM_INBOX_ADDRESS },
+await client.arbitrum().send({
+  inboxAddress: DEFAULT_ARBITRUM_INBOX_ADDRESS,
   to: "0x...", // L2 recipient
   l2CallValue: 0n,
   maxSubmissionCost: 100000000000000n,
   maxGas: 200000n,
   gasPriceBid: 1000000000n,
   data: "0x",
-});
-
-// OP Stack: deposit transaction
-await client.sendTransaction({
-  l2: { type: "op", l1ContractAddress: DEFAULT_OPTIMISM_PORTAL_ADDRESS },
-  to: "0x...",
-  value: 1000000000000000n,
-  gasLimit: 200000n,
 });
 ```
 
@@ -83,8 +83,11 @@ await client.sendTransaction({
 
 - `constructor(config)` – create with an existing `WalletClient` from `viem` and optional contract overrides.
 - `ForceInclusionClient.fromPrivateKey(privateKey, rpcUrl, overrides)` – convenience constructor using `viem` under the hood.
-- `sendTransaction(request)` – unified entry point; pass `request.l2.type` as `"arb"` or `"op"` with an explicit `l1ContractAddress`.
-- `createArbitrumRetryableTicket(request)` / `depositToOptimismPortal(request)` remain available for direct interaction, if preferred.
+- `rollup(type).send(request)` – generic method, recommended primary entry point.
+- `arbitrum().send(request)` / `optimism().send(request)` – convenience methods for built-in adapters.
+- `forceExit(request)` – high-level forced exit workflow (if implemented by adapter).
+- `registerAdapter(adapter)` – add support for additional rollups at runtime by registering a module that implements the common adapter interface.
+- Deprecated: `sendTransaction(request)` remains for backward compatibility and adapts legacy requests internally.
 
 Requests validate numeric inputs, normalize data payloads, and use the caller address for refund parameters by default.
 
@@ -110,11 +113,18 @@ const client = new ForceInclusionClient({
 });
 ```
 
-Override a single transaction by setting `l2.l1ContractAddress` (defaults are exported for convenience, including Sepolia testnet):
+Per-call contract addresses (override defaults):
 
 ```ts
-await client.sendTransaction({
-  l2: { type: "arb", l1ContractAddress: "0x..." },
+await client.optimism().send({
+  portalAddress: "0x...",
+  to: "0x...",
+  value: 1n,
+  gasLimit: 200000n,
+});
+
+await client.arbitrum().send({
+  inboxAddress: "0x...",
   to: "0x...",
   l2CallValue: 1n,
   maxSubmissionCost: 2n,
@@ -135,8 +145,8 @@ const client = ForceInclusionClient.fromPrivateKey(
   `https://sepolia.infura.io/v3/${process.env.INFURA_KEY}`
 );
 
-await client.sendTransaction({
-  l2: { type: "arb", l1ContractAddress: DEFAULT_ARBITRUM_SEPOLIA_INBOX_ADDRESS },
+await client.arbitrum().send({
+  inboxAddress: DEFAULT_ARBITRUM_SEPOLIA_INBOX_ADDRESS,
   to: "0x...",
   l2CallValue: 0n,
   maxSubmissionCost: 100000000000000n,
@@ -144,8 +154,8 @@ await client.sendTransaction({
   gasPriceBid: 1000000000n,
 });
 
-await client.sendTransaction({
-  l2: { type: "op", l1ContractAddress: DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS },
+await client.optimism().send({
+  portalAddress: DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS,
   to: "0x...",
   value: 1000000000000000n,
   gasLimit: 200000n,
@@ -195,12 +205,41 @@ Notes:
 - `DEFAULT_OPTIMISM_PORTAL_ADDRESS`
 - `DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS`
 
+## Plugin / Adapter System
+
+The SDK now uses a core/adapter split:
+
+- Core engine handles validation, orchestration, and calls into adapters.
+- Each rollup is implemented as an adapter module that conforms to a small interface.
+
+Add a new rollup by authoring an adapter and registering it:
+
+```ts
+import type { RollupAdapter } from "evm-force-inclusion";
+
+const MyRollupAdapter: RollupAdapter = {
+  name: "myrollup",
+  supports: ["my", "myrollup"],
+  async sendForceInclusion(request, context) {
+    // construct and submit the L1 tx using context.factories and context.walletClient
+    throw new Error("not implemented");
+  },
+};
+
+const client = new ForceInclusionClient({ walletClient });
+client.registerAdapter(MyRollupAdapter);
+
+await client.rollup("my").send({
+  // adapter-specific request body for your rollup
+} as any);
+```
+
 ## Building & Testing
 
 ```bash
-npm install
-npm run build
-npm run test
+bun install
+bun run build
+bun run test
 ```
 
 Publishing is wired through `prepublishOnly` which runs the build and test suite automatically.

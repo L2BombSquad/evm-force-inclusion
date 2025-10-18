@@ -44,12 +44,26 @@ export interface ForceInclusionContractOverrides {
   optimismPortal?: ForceInclusionContractOverride<OptimismPortalContract>;
 }
 
+export interface Logger {
+  debug: (...args: unknown[]) => void;
+  info: (...args: unknown[]) => void;
+  warn: (...args: unknown[]) => void;
+  error: (...args: unknown[]) => void;
+}
+
+export interface CoreOptions {
+  maxRetries?: number;
+  retryDelayMs?: number;
+  logger?: Logger;
+}
+
 export interface ForceInclusionClientConfig {
   walletClient: WalletClient;
   arbitrumInboxAddress?: string;
   optimismPortalAddress?: string;
   factories?: Partial<ForceInclusionContractFactories>;
   contracts?: ForceInclusionContractOverrides;
+  core?: CoreOptions;
 }
 
 export type ForceInclusionLayerType = "arb" | "op";
@@ -105,4 +119,19 @@ export interface OptimismDepositRequest {
   data?: HexData;
   isCreation?: boolean;
   portalAddress?: string;
+}
+
+export type Address = `0x${string}` | string;
+
+export type Token =
+  | { type: "native"; symbol: string } // e.g. { type: 'native', symbol: 'ETH' }
+  | { type: "erc20"; address: Address; symbol?: string };
+
+export interface ForceExitRequest {
+  rollup: string; // e.g., 'op', 'arb', 'zksync'
+  token: Token;
+  amount: string; // human-readable amount (adapter decides decimals)
+  userAddress: Address;
+  // Optional adapter-specific hints
+  options?: Record<string, unknown>;
 }

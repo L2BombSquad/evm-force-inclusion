@@ -35,11 +35,8 @@ function App() {
         throw new Error(`Please switch your wallet to Sepolia (chainId ${sepolia.id}).`);
       }
       const client = new ForceInclusionClient({ walletClient });
-      const hash = await client.sendTransaction({
-        l2: {
-          type: "op",
-          l1ContractAddress: DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS,
-        },
+      const hash = await client.optimism().send({
+        portalAddress: DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS,
         to: toAddress as `0x${string}`,
         value: parseEther(amountEth),
         gasLimit: gasLimitBigInt,

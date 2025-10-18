@@ -17,8 +17,8 @@ export function DepositButton() {
   async function onClick() {
     if (!walletClient) return;
     const client = new ForceInclusionClient({ walletClient });
-    await client.sendTransaction({
-      l2: { type: 'op', l1ContractAddress: DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS },
+    await client.optimism().send({
+      portalAddress: DEFAULT_OPTIMISM_SEPOLIA_PORTAL_ADDRESS,
       to: '0xRecipient...',
       value: parseEther('0.01'),
       gasLimit: 200000n,
