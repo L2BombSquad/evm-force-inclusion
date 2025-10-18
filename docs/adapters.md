@@ -23,8 +23,9 @@ interface RollupAdapter {
 
 ```ts
 import type { RollupAdapter } from 'evm-force-inclusion';
+import { createAdapter } from 'evm-force-inclusion';
 
-const MyAdapter: RollupAdapter = {
+const MyAdapter: RollupAdapter = createAdapter({
   name: 'myrollup',
   supports: ['my', 'myrollup'],
   async sendForceInclusion(request, { walletClient, factories }) {
@@ -35,7 +36,7 @@ const MyAdapter: RollupAdapter = {
     // Optional: full exit flow (enqueue, prove, finalize)
     throw new Error('not implemented');
   }
-};
+});
 
 client.registerAdapter(MyAdapter);
 ```
@@ -52,4 +53,6 @@ The registry maps aliases to adapters. Use the client methods or generic router:
 ```ts
 await client.arbitrum().send(/* request */);
 await client.rollup('my').send(/* request */ as any);
+// After registration, a method is also available:
+await client.myrollup().send(/* request */ as any);
 ```

@@ -34,4 +34,9 @@ export interface RollupAdapter {
   ): Promise<Hash>;
 }
 
+/** Helper to create a RollupAdapter with a friendlier builder API */
+export function createAdapter(adapter: RollupAdapter): RollupAdapter {
+  return adapter;
+}
+
 

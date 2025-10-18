@@ -10,7 +10,7 @@ TypeScript SDK for constructing L1 transactions that force messages onto Arbitru
 
 - Core engine with retries/logging routes to rollup adapters.
 - Adapters encapsulate chain-specific logic; register more via `client.registerAdapter(...)`.
-- Facade API: `client.rollup(type).send(...)`, `client.optimism().send(...)`, `client.arbitrum().send(...)`. A high-level `client.forceExit(...)` is also available where supported.
+- Client methods: `client.rollup(type).send(...)`, `client.optimism().send(...)`, `client.arbitrum().send(...)`. A high-level `client.forceExit(...)` is also available where supported.
 
 See [Architecture](./architecture.md) and the [Adapters Guide](./adapters.md).
 

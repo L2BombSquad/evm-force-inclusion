@@ -212,6 +212,12 @@ export class ForceInclusionClient {
   /** Register an additional rollup adapter at runtime */
   registerAdapter(adapter: RollupAdapter): void {
     this.registry.register(adapter);
+    // Attach a dynamic method if not already present
+    const methodName = this.registry.getPreferredMethodName(adapter);
+    if (!(methodName in this)) {
+      // @ts-expect-error - dynamic method injection for DX
+      this[methodName] = () => this.rollup(adapter.name);
+    }
   }
 
   /** Target a rollup by alias and reuse the configured wallet/factories */
