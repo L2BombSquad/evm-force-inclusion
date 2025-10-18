@@ -38,8 +38,12 @@ export function createRegistryWithAdapters(adapters: RollupAdapter[]): AdapterRe
 }
 
 function toMethodName(name: string): string {
-  // Convert names like "My Rollup" or "zksync-era" → "myRollup" / "zksyncEra"
-  const parts = name.replace(/[^a-zA-Z0-9]+/g, " ").trim().split(/\s+/);
+  // Normalize separators and also split camelCase boundaries
+  const spaced = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim();
+  const parts = spaced.split(/\s+/);
   if (parts.length === 0) return "adapter";
   const [first, ...rest] = parts;
   return [first.toLowerCase(), ...rest.map((p) => p.charAt(0).toUpperCase() + p.slice(1))].join("");

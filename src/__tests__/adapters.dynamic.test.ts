@@ -31,6 +31,27 @@ describe('Dynamic client methods for adapters', () => {
     expect(result).toBeTypeOf('string');
     expect(called).toBe(true);
   });
+
+  it('exposes client.myRollupAdapter().send for camelCase adapter name', async () => {
+    const walletClient = createTestWalletClient('0x1111111111111111111111111111111111111111');
+    const client = new ForceInclusionClient({ walletClient });
+
+    let called = false;
+    const myAdapter: RollupAdapter = createAdapter({
+      name: 'myRollupAdapter',
+      supports: ['myrollupadapter', 'mra'],
+      async sendForceInclusion(_request: unknown): Promise<Hash> {
+        called = true;
+        return '0xhash' as Hash;
+      },
+    });
+
+    client.registerAdapter(myAdapter);
+    // @ts-expect-error - dynamic method injection
+    const result = await client.myRollupAdapter().send({ some: 'request' } as any);
+    expect(result).toBeTypeOf('string');
+    expect(called).toBe(true);
+  });
 });
 
 

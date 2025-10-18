@@ -217,9 +217,10 @@ Add a new rollup by authoring an adapter and registering it:
 
 ```ts
 import type { RollupAdapter } from "evm-force-inclusion";
+import { createAdapter } from "evm-force-inclusion";
 
-const MyRollupAdapter: RollupAdapter = createAdapter({
-  name: "myrollup",
+const myRollupAdapter: RollupAdapter = createAdapter({
+  name: "myRollupAdapter",
   supports: ["my", "myrollup"],
   async sendForceInclusion(request, context) {
     // construct and submit the L1 tx using context.factories and context.walletClient
@@ -228,14 +229,11 @@ const MyRollupAdapter: RollupAdapter = createAdapter({
 });
 
 const client = new ForceInclusionClient({ walletClient });
-client.registerAdapter(MyRollupAdapter);
+client.registerAdapter(myRollupAdapter);
 
-await client.rollup("my").send({
+await client.myRollupAdapter().send({
   // adapter-specific request body for your rollup
 } as any);
-
-// After registration, a method is also available:
-// await client.myrollup().send({ ... } as any)
 ```
 
 ## Building & Testing
